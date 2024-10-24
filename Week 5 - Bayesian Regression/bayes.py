@@ -125,24 +125,24 @@ class MCMC:
         """
         # Generate predictions
         self.model.set_params(theta)
-        y_pred = 
+        y_pred = self.model.predict(X)
 
         # Compute log-likelihood
-        log_likelihood = 
+        log_likelihood = self.gaussian_likelihood(y, y_pred)
 
         # Compute lop-prior
-        log_prior = 
+        log_prior = self.gaussian_prior(theta)
 
         # Compute log-posterior 
-        log_posterior = 
+        log_posterior = log_likelihood + log_prior
 
         return log_posterior
 
     def random_walk(self, theta_current):
         """
-        TODO: Proposes a new set of parameters by taking a random step.
+        Proposes a new set of parameters by taking a random step.
         """
-        return 
+        return theta_current + np.random.normal(0, self.step_size, len(theta_current))
 
     def fit(self, X, y):
         """
@@ -155,17 +155,17 @@ class MCMC:
         self.samples = np.zeros((self.n_samples, len(theta_current)))
 
         # Compute the current posterior
-        posterior_current = 
+        posterior_current = self.posterior(X, y, theta_current)
 
         for i in range(self.n_samples):
             # Propose new theta
-            theta_proposed = 
+            theta_proposed = self.random_walk(theta_current)
 
             # Compute the posterior of the proposed sample
-            posterior_proposed = 
+            posterior_proposed = self.posterior(X, y, theta_proposed)
 
             # Accept/reject the new sample using the Metropolis-Hastings criterion
-            acceptance_ratio = 
+            acceptance_ratio = np.exp(posterior_proposed - posterior_current)
 
             if np.random.rand() < acceptance_ratio:
                 # Accept the new sample
@@ -177,9 +177,9 @@ class MCMC:
 
     def get_posterior_samples(self):
         """
-        TODO: Returns the MCMC samples.
+        Returns the MCMC samples.
         """
-        return 
+        return self.samples[int(self.burnin*self.n_samples):]
 
 
 
@@ -252,8 +252,3 @@ if __name__ == "__main__":
 
     # Plot trace and hist
     plot_trace_and_hist(samples)
-
-
-
-
- 
