@@ -11,6 +11,7 @@ from sklearn.ensemble import (RandomForestRegressor,
                               AdaBoostRegressor)
 
 from xgboost import XGBRegressor
+pd.set_option("display.precision", 3)
 
 
 
@@ -84,13 +85,13 @@ def train_regression_model(x_train, y_train, model='random_forest'):
 
     # Initialize the model
     if model == 'random_forest':
-        ensemble_model = RandomForestRegressor(n_estimators=100)
+        ensemble_model = RandomForestRegressor(n_estimators=20, max_depth=3)
     elif model == 'gradient_boosting':
-        ensemble_model = GradientBoostingRegressor(n_estimators=100)
+        ensemble_model = GradientBoostingRegressor(n_estimators=20)
     elif model == 'adaboost':
-        ensemble_model = AdaBoostRegressor(n_estimators=100)
+        ensemble_model = AdaBoostRegressor(n_estimators=20)
     elif model == 'xgboost':
-        ensemble_model = XGBRegressor(n_estimators=100)
+        ensemble_model = XGBRegressor(n_estimators=20)
     elif model == 'decision_tree':
         ensemble_model = DecisionTreeRegressor(max_depth=3)
     else:
@@ -102,7 +103,7 @@ def train_regression_model(x_train, y_train, model='random_forest'):
     return ensemble_model
 
 
-def generate_tree_model_predictions(ensemble_model, x_test):
+def generate_model_predictions(ensemble_model, x_test):
 
     # Generate predictions
     y_pred = ensemble_model.predict(x_test)
@@ -126,65 +127,97 @@ if __name__ == '__main__':
     # Read the data
     filename = 'data/ENB2012_data.csv'
     x_train, x_test, y_train, y_test = read_data_from_csv(filename, test_ratio=0.4)
-    
+
+    # Train the models
+    ensemble_models = ['decision_tree', 'random_forest', 'adaboost', 'xgboost']
+    trained_models = {}
+
     # Initialize the results data
-    res_data = {}
+    train_res_data = {}
+    test_res_data = {}
+    n_exp = 10
 
-    # Train Decision Tree Model
-    tree_model = train_regression_model(x_train, y_train, model='decision_tree')
-    y_pred = generate_tree_model_predictions(tree_model, x_test)
-    mse, r2 = evaluate_predictions(y_test, y_pred)
-    res_data['decision_tree'] = {'mse': mse, 'r2': r2}
+    for model_name in ensemble_models:
 
-    # Train Ensemble Model
-    forrest_model = train_regression_model(x_train, y_train, model='random_forest')
-    y_pred = generate_tree_model_predictions(forrest_model, x_test)
-    mse, r2 = evaluate_predictions(y_test, y_pred)
-    res_data['random_forest'] = {'mse': mse, 'r2': r2}
+        print("Training model: ", model_name)
 
-    # Train Ensemble Model
-    gradient_boosting_model = train_regression_model(x_train, y_train, model='gradient_boosting')
-    y_pred = generate_tree_model_predictions(gradient_boosting_model, x_test)
-    mse, r2 = evaluate_predictions(y_test, y_pred)
-    res_data['gradient_boosting'] = {'mse': mse, 'r2': r2}
+        # Train Decision Tree Model
+        train_mse = np.zeros(n_exp)
+        train_r2 = np.zeros(n_exp)
 
-    # Train Ensemble Model
-    adaboost_model = train_regression_model(x_train, y_train, model='adaboost')
-    y_pred = generate_tree_model_predictions(adaboost_model, x_test)
-    mse, r2 = evaluate_predictions(y_test, y_pred)
-    res_data['adaboost'] = {'mse': mse, 'r2': r2}
+        test_mse = np.zeros(n_exp)
+        test_r2 = np.zeros(n_exp)
 
-    # Train Ensemble Model
-    xgb_model = train_regression_model(x_train, y_train, model='xgboost')
-    y_pred = generate_tree_model_predictions(xgb_model, x_test)
-    mse, r2 = evaluate_predictions(y_test, y_pred)
-    res_data['xgboost'] = {'mse': mse, 'r2': r2}
+        for n in range(n_exp):
 
+            trained_models[model_name] = train_regression_model(x_train, y_train, model=model_name)
+            y_pred = generate_model_predictions(trained_models[model_name], x_train)
+            train_mse[n], train_r2[n] = evaluate_predictions(y_train, y_pred)
+
+            y_pred = generate_model_predictions(trained_models[model_name], x_test)
+            test_mse[n], test_r2[n] = evaluate_predictions(y_test, y_pred)
+
+        train_res_data[model_name] = {'mse_mean': train_mse.mean(),
+                                'mse_std': train_mse.std(),
+                                'r2_mean': train_r2.mean(),
+                                'r2_std': train_r2.std()}
+        
+        test_res_data[model_name] = {'mse_mean': test_mse.mean(),
+                                'mse_std': test_mse.std(),
+                                'r2_mean': test_r2.mean(),
+                                'r2_std': test_r2.std()}
+
+    
     # Train Stacking Model
-    base_models, meta_model = train_stacking_model(x_train, y_train)
-    y_pred = generate_stacking_model_predictions(base_models, meta_model, x_test, y_test)
-    mse, r2 = evaluate_predictions(y_test, y_pred)
-    res_data['stacking'] = {'mse': mse, 'r2': r2}
+    train_mse = np.zeros(n_exp)
+    train_r2 = np.zeros(n_exp)
+
+    test_mse = np.zeros(n_exp)
+    test_r2 = np.zeros(n_exp)
+
+    for n in range(n_exp):
+        base_models, meta_model = train_stacking_model(x_train, y_train)
+        y_pred = generate_stacking_model_predictions(base_models, meta_model, x_train, y_train)
+        train_mse[n], train_r2[n] = evaluate_predictions(y_train, y_pred)
+
+        y_pred = generate_stacking_model_predictions(base_models, meta_model, x_test, y_test)
+        test_mse[n], test_r2[n] = evaluate_predictions(y_test, y_pred)
+    
+    train_res_data['stacking'] = {'mse_mean': train_mse.mean(),
+                                'mse_std': train_mse.std(),
+                                'r2_mean': train_r2.mean(),
+                                'r2_std': train_r2.std()}
+
+    test_res_data['stacking'] = {'mse_mean': test_mse.mean(),
+                                'mse_std': test_mse.std(),
+                                'r2_mean': test_r2.mean(),
+                                'r2_std': test_r2.std()}
+
 
     # Display the results
-    res_df = pd.DataFrame(res_data)
+    res_df = pd.DataFrame(train_res_data)
+    print("\nTrain data performance results: ")
+    print(res_df)
+
+    res_df = pd.DataFrame(test_res_data)
+    print("\nTest data performance results: ")
     print(res_df)
 
     # Compare feature importances XGBoost
-    xgb_importances = xgb_model.feature_importances_
+    xgb_importances = trained_models['xgboost'].feature_importances_
     xgb_importances = xgb_importances / np.sum(xgb_importances)
 
-    tree_importances = tree_model.feature_importances_
+    tree_importances = trained_models['decision_tree'].feature_importances_
     tree_importances = tree_importances / np.sum(tree_importances)
 
-    forrest_importances = forrest_model.feature_importances_
+    forrest_importances = trained_models['random_forest'].feature_importances_
     forrest_importances = forrest_importances / np.sum(forrest_importances)
 
     # Plot the feature importances
     # Number of features
     n_features = x_train.shape[1]
 
-    # Create an array with the positions of the bars
+    # Create an array with the positions of the bars``
     indices = np.arange(n_features)
 
     # Width of a bar
